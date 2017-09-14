@@ -20,6 +20,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -53,7 +54,11 @@ public class MainActivity extends AppCompatActivity {
                     if (hasPermissionCamera != PackageManager.PERMISSION_GRANTED) {
                         requestPermissions(new String[] {Manifest.permission.CAMERA}, REQUEST_CODE_ASK_PERMISSIONS);
                     } else if (hasPermissionCamera == PackageManager.PERMISSION_GRANTED){
-                        initTakePhoto();
+                        if (Build.VERSION.SDK_INT >= 25) {
+                            Intent photoCaptureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                            startActivityForResult(photoCaptureIntent, REQUEST_TAKE_PHOTO);
+                        }else
+                            initTakePhoto();
                     }
                 }else {
                     initTakePhoto();
@@ -64,6 +69,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void initTakePhoto(){
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+
+        Toast toast1 =
+                Toast.makeText(getApplicationContext(),
+                        "Toast por defecto", Toast.LENGTH_SHORT);
+
+        toast1.show();
 
         // Ensure that there's a camera activity to handle the intent
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
@@ -113,24 +124,38 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_TAKE_PHOTO && resultCode == RESULT_OK) {
-            // Show the thumbnail on ImageView
-            Uri imageUri = Uri.parse(mCurrentPhotoPath);
-            File file = new File(imageUri.getPath());
+            if (Build.VERSION.SDK_INT < 25) {
+                // Show the thumbnail on ImageView
+                Uri imageUri = Uri.parse(mCurrentPhotoPath);
+                File file = new File(imageUri.getPath());
 
-            try {
-                InputStream ims = new FileInputStream(file);
-                ivPreview.setImageBitmap(BitmapFactory.decodeStream(ims));
-            } catch (FileNotFoundException e) {
-                return;
+                try {
+                    InputStream ims = new FileInputStream(file);
+                    ivPreview.setImageBitmap(BitmapFactory.decodeStream(ims));
+                } catch (FileNotFoundException e) {
+                    return;
+                }
+
+                // ScanFile so it will be appeared on Gallery
+                MediaScannerConnection.scanFile(MainActivity.this,
+                        new String[]{imageUri.getPath()}, null,
+                        new MediaScannerConnection.OnScanCompletedListener() {
+                            public void onScanCompleted(String path, Uri uri) {
+                            }
+                        });
+            } else {
+                if(data != null)
+                {
+                    Bundle extras = data.getExtras();
+                    Bitmap bmp = (Bitmap) extras.get("data");
+
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 100,out);
+                    Bitmap decoded = BitmapFactory.decodeStream(new ByteArrayInputStream(out.toByteArray()));
+
+                    ivPreview.setImageBitmap(decoded);
+                }
             }
-
-            // ScanFile so it will be appeared on Gallery
-            MediaScannerConnection.scanFile(MainActivity.this,
-                    new String[]{imageUri.getPath()}, null,
-                    new MediaScannerConnection.OnScanCompletedListener() {
-                        public void onScanCompleted(String path, Uri uri) {
-                        }
-                    });
         }
     }
 }
